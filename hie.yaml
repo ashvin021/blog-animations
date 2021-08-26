@@ -1,0 +1,7 @@
+cradle:
+  cabal:
+    - path: "src"
+      component: "lib:blog-animations"
+
+    - path: "app/Main.hs"
+      component: "blog-animations:exe:blog-animations"
