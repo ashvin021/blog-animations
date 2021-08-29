@@ -3,9 +3,11 @@
 module Animations.Common where
 
 import Control.Lens ((%=), (&), (.=), (.~), (?~))
+import qualified Data.Text as T
 import qualified Graphics.SvgTree.Types as G
 import Reanimate
 import Reanimate.Scene (Origin)
+import Text.Printf (printf)
 
 -- Colour Themes
 
@@ -50,6 +52,16 @@ mkRoundedRect width height cornerRadius =
       & G.rectHeight ?~ G.Num height
       & G.rectCornerRadius .~ (Just (G.Num cornerRadius), Just (G.Num cornerRadius))
 
+mkCircleWithText :: Double -> T.Text -> AnimationTheme -> SVG
+mkCircleWithText r txt theme
+  = mkGroup [ mkCircle r
+            , withThemeSecondary theme $ scale 0.75 $ center $ latexMono txt ]
+
+mkCircleWithInt :: Double -> Int -> AnimationTheme -> SVG
+mkCircleWithInt r i theme
+  = mkGroup [ mkCircle r
+            , withThemeSecondary theme $ scale 0.75 $ center $ latexMonoInt i ]
+
 -- Custom Animations
 
 oSlideInFromTop :: SVG -> Animation
@@ -78,3 +90,11 @@ oSlideOutToBottom svg = oSlideOutTo (x + w / 2, screenBottom - h / 2) svg
 
 oSlideOutTo :: Origin -> SVG -> Animation
 oSlideOutTo origin = reverseA . oSlideIn' (curveS 2) origin
+
+-- Custom Latex
+
+latexMono :: T.Text -> SVG
+latexMono t = latex $ T.pack $ printf "\\texttt{%s}" t
+
+latexMonoInt :: Int -> SVG
+latexMonoInt i = latex $ T.pack $ printf "\\texttt{%d}" i

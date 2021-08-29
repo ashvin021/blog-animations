@@ -4,12 +4,18 @@
 module Animations.Haskell.BasicFunctions where
 
 import Animations.Common
-import Control.Lens ((%=))
+import Control.Lens ((%=), (.~))
 import Control.Monad (forM_, void)
 import qualified Data.Text as T
+import Linear.V2
 import Reanimate
 import Reanimate.LaTeX (latexCfg, noto)
 import Reanimate.Scene
+import Graphics.SvgTree
+  ( Origin (OriginAbsolute),
+    PathCommand (MoveTo, SmoothCurveTo),
+    RPoint,
+  )
 
 data UnaryFn s = UnaryFn { input   :: Object s SVG,
                            output  :: Object s SVG,
@@ -24,7 +30,7 @@ data BinaryFn s = BinaryFn { input1  :: Object s SVG
                            , fnType  :: Object s SVG
                            }
 
----------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 
 basicFunctions :: Animation
 basicFunctions = basicFunctions' DarkTheme
@@ -50,7 +56,7 @@ basicFunctions' th = env th $ scene $ do
     forM_ [0..1] $ \_ ->
       addExampleLoop (BinaryFn {..})
 
----------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 
 basicAToB :: Animation
 basicAToB = basicAToB' DarkTheme
@@ -80,7 +86,8 @@ basicAToBLoop UnaryFn {..} = do
     oShow output
     output `oHideWith` (setDuration 2 . oSlideOutToBottom)
 
----------------------------------------------------------------------------
+
+--------------------------------------------------------------------------------
 
 addExample :: Animation
 addExample = addExample' DarkTheme
@@ -98,18 +105,12 @@ addExample' th = env th $ scene $ do
 
 addExampleObjs :: AnimationTheme -> Scene s (BinaryFn s)
 addExampleObjs th = do
-    input1  <- oNew $ translate (-1.1) 0 $ mkCircleWithText 0.5 "9" th
-    input2  <- oNew $ translate 2.005 0  $ mkCircleWithText 0.5 "10" th
-    output  <- oNew $ translate 5.25 0   $ mkCircleWithText 0.5 "19" th
+    input1  <- oNew $ translate (-1.1) 0 $ mkCircleWithInt 0.5 9 th
+    input2  <- oNew $ translate 2.005 0  $ mkCircleWithInt 0.5 10 th
+    output  <- oNew $ translate 5.25 0   $ mkCircleWithInt 0.5 19 th
     outline <- oNew $ withThemePrimary th $ mkRoundedRect 13 1.6 0.8
     fnType  <- oNew $ withThemeSecondary th addFunction
     return (BinaryFn {..})
-
-mkCircleWithText :: Double -> T.Text -> AnimationTheme -> SVG
-mkCircleWithText r txt theme
-  = mkGroup [ mkCircle r
-            , withThemeSecondary theme
-            $ scale 0.75 $ center $ latex $ T.concat ["\\texttt{", txt, "}"]]
 
 addExampleLoop :: BinaryFn s -> Scene s ()
 addExampleLoop BinaryFn {..} = do
@@ -119,4 +120,61 @@ addExampleLoop BinaryFn {..} = do
     output `oHideWith` (setDuration 2 . oSlideOutToBottom)
 
 addFunction :: SVG
-addFunction = center $ latex "\\texttt{(+) :: Int → Int → Int}"
+addFunction = center $ latexMono "(+) :: Int → Int → Int"
+
+
+--------------------------------------------------------------------------------
+
+type VarObject s a = (Sprite s, Var s a)
+type ImpureFn s = (UnaryFn s, Object s SVG, Object s SVG, VarObject s Int)
+
+impureFunction :: Animation
+impureFunction = impureFunction' DarkTheme
+
+impureFunction' :: AnimationTheme -> Animation
+impureFunction' th = env th $ scene $ do
+    fn @ (UnaryFn {..}, effectLabel, _, _) <- impureFunctionObjs th
+    oShow outline
+    oShow effectLabel
+    fnType `oShowWith`(setDuration 2.5 . oDraw)
+    forM_ [0..6] $ \_ ->
+      impureFunctionLoop fn
+
+impureFunctionLoop :: ImpureFn s -> Scene s ()
+impureFunctionLoop (UnaryFn {..}, _, line, (cntSVG, cntVar)) = do
+    input `oShowWith` (setDuration 2 . oSlideInFromTop)
+
+    line `oShowWith` (setDuration 0.1 . oDraw)
+    modifyVar cntVar (+ 1)
+    line `oHideWith` (setDuration 0.1 . oDraw)
+
+    oShow output
+    output `oHideWith` (setDuration 2 . oSlideOutToBottom)
+
+impureFunctionObjs :: AnimationTheme  -> Scene s (ImpureFn s)
+impureFunctionObjs th = do
+    -- Objects for unary function
+    let outlineHeight = 1.4
+    let outlineLength = 13
+    input   <- oNew $ translate 5.55 (-1) $ mkCircleWithInt 0.5 6 th
+    output  <- oNew $ translate (-5.45) (-1) $ mkCircleWithInt 0.5 (-6) th
+    outline <- oNew $ translate 0 (-1) $ withThemePrimary th
+                    $ mkRoundedRect outlineLength outlineHeight (outlineHeight / 2)
+    fnType  <- oNew $ translate 0 (-1) $ withThemeSecondary th $ center
+                    $ latexMono "int countedNegate(int x)"
+    -- Variable, outline and label for counter
+    cntVar  <- newVar 0
+    cntSVG  <- newSprite (translate 1.95 2.25 . withThemePrimary th
+                    . (\v -> mkCircleWithInt 0.5 v th) <$> unVar cntVar)
+    label   <- oNew $ translate (-2.75) 2 $ latexMono "counter:"
+    -- Line
+    line    <- oNew $ smoothCurve (V2 0 ((outlineHeight / 2) - 1)) (V2 1.95 1.75)
+    oModify line $ oZIndex .~ 0
+    return (UnaryFn {..}, label, line, (cntSVG, cntVar))
+
+smoothCurve :: RPoint -> RPoint -> SVG
+smoothCurve from to
+  = withFillOpacity 0
+  $ mkPath [ MoveTo OriginAbsolute [from]
+           , SmoothCurveTo OriginAbsolute [(from, to)]
+           ]
